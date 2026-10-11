@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <!-- ============================================================
+       МЕТА
+       ============================================================ -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Рядом — поддержка между сессиями</title>
+  <meta name="description" content="Telegram-бот «Рядом»: поддержка между сессиями терапии, 24/7. Дыхание, дневник, практики самопомощи, анонимное комьюнити.">
+
+  <!-- ============================================================
+       ШРИФТЫ
+       ============================================================ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* ==========================================================
+       1. ПЕРЕМЕННЫЕ И БАЗА
+       ========================================================== */
+    :root {
+      /* Цвета */
+      --bg: #0F0E12;
+      --bg2: #14121A;
+      --card: #1C1923;
+      --line: #2E2A37;
+      --ink: #E8DCC8;
+      --mute: #B3A996;
+      --rose: #D4A5A5;
+      --blue: #7B8FA1;
+      --gold: #C9A876;
+
+      /* Типографика и отступы */
+      --sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --pad: clamp(20px, 6vw, 96px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font: 400 17px/1.65 var(--sans);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Зернистая текстура поверх всего */
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .07;
+      z-index: 50;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    }
+
+    a { color: inherit; }
+
+    :focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 4px;
+      border-radius: 6px;
+    }
+
+    /* ==========================================================
+       2. ЛЕЙАУТ
+       ========================================================== */
+    .wrap {
+      padding: 0 var(--pad);
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    section {
+      padding: clamp(80px, 12vw, 150px) 0;
+      position: relative;
+    }
+
+    h2 {
+      font: 500 clamp(32px, 4.6vw, 56px)/1.12 var(--sans);
+      letter-spacing: .005em;
+      max-width: 18ch;
+    }
+
+    .lead {
+      color: var(--mute);
+      max-width: 48ch;
+      margin-top: 20px;
+    }
+
+    /* ==========================================================
+       3. ИКОНКИ
+       ========================================================== */
+    svg.i {
+      width: 26px;
+      height: 26px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ==========================================================
+       4. КНОПКИ
+       ========================================================== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 36px;
+      border-radius: 999px;
+      font: 600 16px var(--sans);
+      letter-spacing: .02em;
+      text-decoration: none;
+      transition: background .6s, transform .6s, border-color .6s;
+      cursor: pointer;
+      border: 0;
+      color: inherit;
+      background: none;
+    }
+    .btn.main {
+      background: var(--gold);
+      color: var(--bg);
+    }
+    .btn.main:hover {
+      background: #d8b98a;
+      transform: translateY(-2px);
+    }
+    .btn.ghost { border: 1px solid rgba(232, 220, 200, .4); }
+    .btn.ghost:hover { border-color: var(--ink); }
+    .btn.sm { padding: 13px 24px; font-size: 15px; }
+    .btn svg.i { width: 20px; height: 20px; }
+
+    /* ==========================================================
+       5. HERO
+       ========================================================== */
+    .hero {
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: radial-gradient(120% 80% at 50% 105%, #2a2030 0%, var(--bg) 60%);
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 28px var(--pad);
+      position: relative;
+      z-index: 2;
+    }
+    nav b {
+      font: 600 24px var(--sans);
+      letter-spacing: .08em;
+    }
+    nav a {
+      font-size: 14px;
+      color: var(--mute);
+      text-decoration: none;
+      margin-left: 28px;
+      transition: color .5s;
+    }
+    nav a:hover { color: var(--ink); }
+
+    /* Анимированное небо и лотос */
+    .sky {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+    }
+    .ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(232, 220, 200, .14);
+      animation: breathe 9s ease-in-out infinite;
+    }
+    .ring:nth-child(1) { width: min(46vw, 520px); aspect-ratio: 1; }
+    .ring:nth-child(2) { width: min(70vw, 800px); aspect-ratio: 1; animation-delay: -3s; border-color: rgba(212, 165, 165, .12); }
+    .ring:nth-child(3) { width: min(98vw, 1100px); aspect-ratio: 1; animation-delay: -6s; border-color: rgba(123, 143, 161, .12); }
+
+    .lotus {
+      position: relative;
+      width: min(40vw, 400px);
+      min-width: 220px;
+      transform: translateY(-8vh);
+      filter: drop-shadow(0 0 36px rgba(212, 165, 165, .28));
+      animation: float 9s ease-in-out infinite;
+    }
+    .lotus .p {
+      transform-origin: 100px 150px;
+      transform-box: view-box;
+      animation: bloom 9s ease-in-out infinite;
+      animation-delay: var(--d, 0s);
+    }
+    .lotus .rp {
+      transform-origin: 100px 158px;
+      transform-box: view-box;
+      animation: ripple 9s ease-out infinite;
+      animation-delay: var(--d, 0s);
+    }
+    .lotus .core {
+      animation: glow 9s ease-in-out infinite;
+      transform-origin: 100px 128px;
+      transform-box: view-box;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(.94); opacity: .5; }
+      50%      { transform: scale(1.04); opacity: 1; }
+    }
+    @keyframes bloom {
+      0%, 100% { transform: rotate(var(--a)) scale(.9); }
+      50%      { transform: rotate(calc(var(--a) * 1.2)) scale(1.04); }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(-8vh); }
+      50%      { transform: translateY(-10vh); }
+    }
+    @keyframes ripple {
+      0%   { transform: scale(.45); opacity: .7; }
+      100% { transform: scale(1.7); opacity: 0; }
+    }
+    @keyframes glow {
+      0%, 100% { opacity: .5; transform: scale(.8); }
+      50%      { opacity: 1; transform: scale(1.25); }
+    }
+
+    .hero-body {
+      position: relative;
+      z-index: 2;
+      margin-top: auto;
+      padding: 0 var(--pad) 48px;
+      text-align: center;
+    }
+    .hero h1 {
+      font: 500 clamp(72px, 15vw, 200px)/.95 var(--sans);
+      letter-spacing: .05em;
+      padding-left: .05em;
+      opacity: 0;
+      animation: rise 3s .3s cubic-bezier(.2, .6, .2, 1) forwards;
+    }
+    .hero p.sub {
+      font-size: clamp(17px, 2vw, 21px);
+      margin: 22px auto 0;
+      max-width: 34ch;
+      opacity: 0;
+      animation: rise 3s 1s forwards;
+    }
+    .cta {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 34px;
+      opacity: 0;
+      animation: rise 3s 1.5s forwards;
+    }
+    .slogan {
+      font: 500 clamp(16px, 1.8vw, 20px)/1.5 var(--sans);
+      color: var(--rose);
+      margin: 40px auto 0;
+      max-width: 42ch;
+      opacity: 0;
+      animation: rise 3s 2s forwards;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    /* ==========================================================
+       6. КАРТОЧКИ
+       ========================================================== */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .8s;
+    }
+    .card:hover { border-color: rgba(201, 168, 118, .4); }
+    .card::before {
+      content: "";
+      position: absolute;
+      width: 220px;
+      height: 220px;
+      right: -90px;
+      top: -90px;
+      border-radius: 50%;
+      background: var(--g, var(--rose));
+      opacity: .09;
+      filter: blur(40px);
+    }
+
+    .ic {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: var(--c, var(--rose));
+      background: color-mix(in srgb, var(--c, var(--rose)) 14%, transparent);
+      margin-bottom: 28px;
+    }
+
+    /* ==========================================================
+       7. БЛОК «ЗНАКОМО?»
+       ========================================================== */
+    .grid4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-top: 64px;
+    }
+    .pain p { font: 500 22px/1.35 var(--sans); }
+
+    /* ==========================================================
+       8. БЛОК «ЧТО ВНУТРИ»
+       ========================================================== */
+    .features { background: var(--bg2); }
+
+    .rail {
+      display: flex;
+      gap: 20px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      padding: 64px var(--pad) 16px;
+      margin: 0 calc(-1 * var(--pad));
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+    .rail .card {
+      flex: 0 0 min(340px, 82vw);
+      scroll-snap-align: start;
+      --c: var(--gold);
+      --g: var(--gold);
+      padding: 36px;
+    }
+    .rail h3 {
+      font: 600 23px/1.2 var(--sans);
+      margin-bottom: 12px;
+    }
+    .rail p { color: var(--mute); font-size: 16px; }
+
+    /* ==========================================================
+       9. БЛОК «КАК ЭТО РАБОТАЕТ»
+       ========================================================== */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 28px;
+      margin-top: 64px;
+      counter-reset: s;
+    }
+    .step {
+      border-top: 1px solid var(--line);
+      padding-top: 24px;
+      counter-increment: s;
+    }
+    .step::before {
+      content: counter(s, decimal-leading-zero);
+      font: 500 52px/1 var(--sans);
+      color: var(--gold);
+      display: block;
+      margin-bottom: 20px;
+    }
+    .step h3 {
+      font: 600 19px/1.3 var(--sans);
+      margin-bottom: 6px;
+    }
+    .step p { color: var(--mute); font-size: 16px; }
+
+    /* ==========================================================
+       10. БЛОК «ЗДЕСЬ БЕЗОПАСНО»
+       ========================================================== */
+    .safe { background: var(--bg2); }
+
+    .safe .box {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: clamp(32px, 6vw, 96px);
+      align-items: start;
+    }
+
+    .list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .list .card {
+      --c: var(--blue);
+      --g: var(--blue);
+      padding: 28px;
+    }
+    .list h3 {
+      font: 600 17px var(--sans);
+      margin-bottom: 6px;
+    }
+    .list p {
+      color: var(--mute);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    .list a {
+      color: var(--gold);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    /* ==========================================================
+       11. СТАТИСТИКА
+       ========================================================== */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 56px 32px;
+      margin-top: 72px;
+    }
+    .stats b {
+      display: block;
+      font: 500 clamp(44px, 5.2vw, 72px)/1 var(--sans);
+      letter-spacing: -.01em;
+      white-space: nowrap;
+    }
+    .stats span {
+      display: block;
+      color: var(--mute);
+      margin-top: 12px;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .stats i {
+      font-style: normal;
+      color: var(--gold);
+      font-size: 14px;
+      display: block;
+      margin-top: 12px;
+    }
+
+    /* ==========================================================
+       12. БЛОК «СТАНЬ ЧАСТЬЮ» И ФОРМА
+       ========================================================== */
+    .join {
+      background: radial-gradient(90% 70% at 50% 100%, #2a2030, var(--bg) 70%);
+      text-align: center;
+    }
+    .join h2 { margin: 0 auto; }
+    .join .lead { margin-left: auto; margin-right: auto; }
+
+    .grid3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 64px;
+      text-align: left;
+    }
+    .grid3 .card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 36px;
+    }
+    .grid3 h3 {
+      font: 600 23px/1.2 var(--sans);
+    }
+    .grid3 p {
+      color: var(--mute);
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+    .grid3 .btn { margin-top: auto; }
+
+    .vform {
+      max-width: 720px;
+      margin: 20px auto 0;
+      text-align: left;
+      padding: 40px;
+      display: grid;
+      gap: 20px;
+      scroll-margin-top: 40px;
+    }
+    .vform h3 { font: 600 26px/1.2 var(--sans); }
+    .vform label {
+      display: grid;
+      gap: 8px;
+      font-size: 15px;
+      color: var(--mute);
+    }
+    .vform input,
+    .vform textarea {
+      font: 400 17px/1.5 var(--sans);
+      color: var(--ink);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 18px;
+      width: 100%;
+      resize: vertical;
+      transition: border-color .5s;
+    }
+    .vform input:focus,
+    .vform textarea:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+    .vform .btn { justify-self: start; }
+    .vform .note {
+      font-size: 14px;
+      color: var(--mute);
+      min-height: 1.4em;
+    }
+
+    /* ==========================================================
+       13. ПОДВАЛ
+       ========================================================== */
+    footer {
+      padding: 56px 0 40px;
+      border-top: 1px solid var(--line);
+      color: var(--mute);
+      font-size: 15px;
+    }
+    footer .wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 32px 64px;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    footer b {
+      font: 600 28px var(--sans);
+      color: var(--ink);
+      letter-spacing: .08em;
+      display: block;
+      margin-bottom: 8px;
+    }
+    footer .links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    footer .hot a {
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 600;
+      display: block;
+      margin-top: 4px;
+    }
+    footer .fine {
+      width: 100%;
+      font-size: 13px;
+      opacity: .8;
+    }
+
+    /* ==========================================================
+       14. АНИМАЦИЯ ПОЯВЛЕНИЯ
+       ========================================================== */
+    .rv {
+      opacity: 0;
+      transform: translateY(22px);
+      transition: opacity 1.6s cubic-bezier(.2, .6, .2, 1),
+                  transform 1.6s cubic-bezier(.2, .6, .2, 1);
+    }
+    .rv.in {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* ==========================================================
+       15. АДАПТИВНОСТЬ
+       ========================================================== */
+    @media (max-width: 960px) {
+      .grid4, .steps, .stats { grid-template-columns: 1fr 1fr; }
+      .safe .box, .grid3    { grid-template-columns: 1fr; }
+      .list                 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .grid4, .steps, .stats { grid-template-columns: 1fr; }
+      nav a { display: none; }
+      .vform { padding: 28px; }
+    }
+
+    /* Уважение к настройкам пользователя */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+        transition: none !important;
+      }
+      .hero h1, .hero .sub, .cta, .slogan, .rv {
+        opacity: 1 !important;
+        transform: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ============================================================
+       SVG-СПРАЙТ (иконки и градиенты)
+       ============================================================ -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <!-- Иконки -->
+      <symbol id="moon"    viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+      <symbol id="waves"   viewBox="0 0 24 24"><path d="M2 9c2.5-3 4.5-3 7 0s4.5 3 7 0 3.5-2 6 0"/><path d="M2 15c2.5-3 4.5-3 7 0s4.5 3 7 0 3.5-2 6 0"/></symbol>
+      <symbol id="bubble"  viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10.5h6"/></symbol>
+      <symbol id="exit"    viewBox="0 0 24 24"><path d="M9 4H5v16h4"/><path d="M15 8l4 4-4 4M19 12H9"/></symbol>
+      <symbol id="duo"     viewBox="0 0 24 24"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></symbol>
+      <symbol id="rings"   viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="10"/></symbol>
+      <symbol id="leaf"    viewBox="0 0 24 24"><path d="M5 19c0-9 5-14 14-14 0 9-5 14-14 14z"/><path d="M5 19l8-8"/></symbol>
+      <symbol id="diary"   viewBox="0 0 24 24"><path d="M6 3h11a2 2 0 0 1 2 2v16H8a2 2 0 0 1-2-2z"/><path d="M10 8h6M10 12h6"/></symbol>
+      <symbol id="circle"  viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><circle cx="5.5" cy="10" r="2.2"/><circle cx="18.5" cy="10" r="2.2"/><path d="M6.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/></symbol>
+      <symbol id="eyeoff"  viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/><path d="M4 4l16 16"/></symbol>
+      <symbol id="bridge"  viewBox="0 0 24 24"><path d="M3 17c3-8 15-8 18 0M3 17h18"/><path d="M8 12v5M12 10v7M16 12v5"/></symbol>
+      <symbol id="shield"  viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+      <symbol id="phone"   viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></symbol>
+      <symbol id="send"    viewBox="0 0 24 24"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></symbol>
+      <symbol id="cam"     viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6"/></symbol>
+      <symbol id="bell"    viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/></symbol>
+
+      <!-- Градиенты -->
+      <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#E8DCC8"/>
+        <stop offset="1" stop-color="#D4A5A5"/>
+      </linearGradient>
+      <radialGradient id="cg">
+        <stop offset="0" stop-color="#F3E3C0"/>
+        <stop offset="1" stop-color="#C9A876" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+  </svg>
+
+  <!-- ============================================================
+       HERO
+       ============================================================ -->
+  <header class="hero">
+    <nav>
+      <b>Рядом</b>
+      <div>
+        <a href="#znakomo">Знакомо?</a>
+        <a href="#vnutri">Что внутри</a>
+        <a href="#bezopasnost">Безопасность</a>
+      </div>
+    </nav>
+
+    <div class="sky" aria-hidden="true">
+      <i class="ring"></i>
+      <i class="ring"></i>
+      <i class="ring"></i>
+
+      <svg class="lotus" viewBox="0 0 200 200">
+        <!-- Волны -->
+        <ellipse class="rp" cx="100" cy="158" rx="70" ry="13" fill="none" stroke="#E8DCC8" stroke-width="1" style="--d:0s"/>
+        <ellipse class="rp" cx="100" cy="158" rx="70" ry="13" fill="none" stroke="#D4A5A5" stroke-width="1" style="--d:-3s"/>
+        <ellipse class="rp" cx="100" cy="158" rx="70" ry="13" fill="none" stroke="#7B8FA1" stroke-width="1" style="--d:-6s"/>
+
+        <!-- Лепестки -->
+        <g fill="url(#pg)" stroke="#E8DCC8" stroke-opacity=".55" stroke-width=".8">
+          <path class="p" style="--a:-66deg;--d:-.6s" fill-opacity=".45" d="M100 150C118 122 118 88 100 60C82 88 82 122 100 150Z"/>
+          <path class="p" style="--a:66deg;--d:-.6s"  fill-opacity=".45" d="M100 150C118 122 118 88 100 60C82 88 82 122 100 150Z"/>
+          <path class="p" style="--a:-42deg;--d:-.3s" fill-opacity=".6"  d="M100 150C118 122 118 88 100 60C82 88 82 122 100 150Z"/>
+          <path class="p" style="--a:42deg;--d:-.3s"  fill-opacity=".6"  d="M100 150C118 122 118 88 100 60C82 88 82 122 100 150Z"/>
+          <path class="p" style="--a:-20deg;--d:0s"   fill-opacity=".75" d="M100 150C118 122 118 88 100 60C82 88 82 122 100 150Z"/>
+          <path class="p" style="--a:20deg;--d:0s"    fill-opacity=".75" d="M100 150C118 122 118 88 100 60C82 88 82 122 100 150Z"/>
+          <path class="p" style="--a:0deg;--d:.2s"    fill-opacity=".9"  d="M100 150C118 122 118 88 100 60C82 88 82 122 100 150Z"/>
+        </g>
+
+        <!-- Ядро -->
+        <circle class="core" cx="100" cy="128" r="22" fill="url(#cg)"/>
+      </svg>
+    </div>
+
+    <div class="hero-body">
+      <h1>Рядом</h1>
+      <p class="sub">Поддержка между сессиями. Бот, который рядом 24/7.</p>
+
+      <div class="cta">
+        <a class="btn main"  href="https://t.me/ryadom_psychological_bot">Запустить бота</a>
+        <a class="btn ghost" href="#znakomo">Узнать больше</a>
+      </div>
+
+      <p class="slogan">Ты не один. Здесь тебе помогут, поддержат и, главное, не осудят.</p>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ==========================================================
+         ЗНАКОМО?
+         ========================================================== -->
+    <section id="znakomo">
+      <div class="wrap">
+        <h2 class="rv">Знакомо?</h2>
+        <div class="grid4">
+          <article class="card pain rv">
+            <div class="ic"><svg class="i"><use href="#moon"/></svg></div>
+            <p>Накрывает ночью, а написать некому</p>
+          </article>
+          <article class="card pain rv">
+            <div class="ic"><svg class="i"><use href="#waves"/></svg></div>
+            <p>Паника в метро, техники забываю</p>
+          </article>
+          <article class="card pain rv">
+            <div class="ic"><svg class="i"><use href="#bubble"/></svg></div>
+            <p>Стыдно писать психологу вне сессии</p>
+          </article>
+          <article class="card pain rv">
+            <div class="ic"><svg class="i"><use href="#exit"/></svg></div>
+            <p>Терапия закончилась, боюсь скатиться</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         ЧТО ВНУТРИ
+         ========================================================== -->
+    <section class="features" id="vnutri">
+      <div class="wrap">
+        <h2 class="rv">Что внутри</h2>
+        <p class="lead rv">Пять вещей, которые помогают дожить до следующей сессии и не потерять себя после неё.</p>
+
+        <div class="rail" tabindex="0" aria-label="Возможности бота">
+          <article class="card">
+            <div class="ic"><svg class="i"><use href="#duo"/></svg></div>
+            <h3>Бот-компаньон 24/7</h3>
+            <p>Я рядом, не осуждаю, не устаю. Можно писать в три часа ночи.</p>
+          </article>
+          <article class="card">
+            <div class="ic"><svg class="i"><use href="#rings"/></svg></div>
+            <h3>Карточки поддержки</h3>
+            <p>Дыхание, заземление, SOS. Короткие шаги на случай, когда накрыло и слова не находятся.</p>
+          </article>
+          <article class="card">
+            <div class="ic"><svg class="i"><use href="#leaf"/></svg></div>
+            <h3>Практики самопомощи</h3>
+            <p>Техники, которые помогают успокоиться и вернуться в ресурс.</p>
+          </article>
+          <article class="card">
+            <div class="ic"><svg class="i"><use href="#diary"/></svg></div>
+            <h3>Дневник</h3>
+            <p>Подсказки для записей, трекинг состояния и рефлексия. Видно, как ты меняешься.</p>
+          </article>
+          <article class="card">
+            <div class="ic"><svg class="i"><use href="#circle"/></svg></div>
+            <h3>Анонимное комьюнити</h3>
+            <p>Люди с похожим опытом. Можно просто читать, можно рассказать.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         КАК ЭТО РАБОТАЕТ
+         ========================================================== -->
+    <section id="kak">
+      <div class="wrap">
+        <h2 class="rv">Как это работает</h2>
+        <div class="steps">
+          <div class="step rv">
+            <h3>Видишь посты в соцсетях</h3>
+            <p>И переходишь в Telegram-бот.</p>
+          </div>
+          <div class="step rv">
+            <h3>Запускаешь бота</h3>
+            <p>И получаешь поддержку.</p>
+          </div>
+          <div class="step rv">
+            <h3>Ведёшь дневник</h3>
+            <p>И видишь свой прогресс.</p>
+          </div>
+          <div class="step rv">
+            <h3>Заходишь в комьюнити</h3>
+            <p>И находишь понимание.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         ЗДЕСЬ БЕЗОПАСНО
+         ========================================================== -->
+    <section class="safe" id="bezopasnost">
+      <div class="wrap box">
+        <div class="rv">
+          <h2>Здесь безопасно</h2>
+          <p class="lead">Мы бережно относимся к тому, что ты приносишь сюда, и честно говорим, чем не являемся.</p>
+        </div>
+
+        <div class="list">
+          <div class="card rv">
+            <div class="ic"><svg class="i"><use href="#eyeoff"/></svg></div>
+            <h3>Анонимность</h3>
+            <p>Имя и личные данные не нужны.</p>
+          </div>
+          <div class="card rv">
+            <div class="ic"><svg class="i"><use href="#bridge"/></svg></div>
+            <h3>Не заменяем терапию</h3>
+            <p>Мы мост между сессиями, а не вместо них.</p>
+          </div>
+          <div class="card rv">
+            <div class="ic"><svg class="i"><use href="#shield"/></svg></div>
+            <h3>Модерация</h3>
+            <p>В комьюнити следят за уважением и тишиной от токсичности.</p>
+          </div>
+          <div class="card rv">
+            <div class="ic"><svg class="i"><use href="#phone"/></svg></div>
+            <h3>Если совсем тяжело</h3>
+            <p>Позвони на горячую линию: <a href="tel:88002000122">8-800-2000-122</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         СООБЩЕСТВО И СТАТИСТИКА
+         ========================================================== -->
+    <section id="soobschestvo">
+      <div class="wrap">
+        <h2 class="rv">Ты не один в этом</h2>
+        <p class="lead rv">Тревога и усталость — не слабость, а очень распространённый опыт.</p>
+
+        <div class="stats">
+          <div class="rv"><b>301 млн</b><span>человек живут с тревожными расстройствами</span><i>ВОЗ</i></div>
+          <div class="rv"><b>970 млн</b><span>человек, то есть каждый восьмой, живут с психическим расстройством</span><i>ВОЗ, 2019</i></div>
+          <div class="rv"><b>280 млн</b><span>человек живут с депрессией</span><i>ВОЗ</i></div>
+          <div class="rv"><b>+25%</b><span>рост тревоги и депрессии в первый год пандемии</span><i>ВОЗ, 2022</i></div>
+          <div class="rv"><b>44%</b><span>людей в стрессе</span><i>Gallup</i></div>
+          <div class="rv"><b>60%</b><span>не обращаются за помощью</span><i>по данным исследований</i></div>
+          <div class="rv"><b>50%</b><span>психических состояний начинаются до 14 лет</span><i>ВОЗ</i></div>
+          <div class="rv"><b>1 трлн $</b><span>теряет мировая экономика в год из-за депрессии и тревоги</span><i>ВОЗ</i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         СТАНЬ ЧАСТЬЮ
+         ========================================================== -->
+    <section class="join">
+      <div class="wrap">
+        <h2 class="rv">Стань частью</h2>
+        <p class="lead rv">Начать можно с одного сообщения.</p>
+
+        <div class="grid3">
+          <article class="card rv">
+            <div class="ic"><svg class="i"><use href="#duo"/></svg></div>
+            <h3>Мне нужна поддержка</h3>
+            <p>Запусти бота и напиши, как ты сейчас.</p>
+            <a class="btn main" href="https://t.me/ryadom_psychological_bot">Запустить бота</a>
+          </article>
+          <article class="card rv">
+            <div class="ic"><svg class="i"><use href="#circle"/></svg></div>
+            <h3>Хочу помогать</h3>
+            <p>Присоединяйся к волонтёрам и будь рядом с теми, кому тяжело.</p>
+            <a class="btn ghost" href="#volunteer">Стать волонтёром</a>
+          </article>
+          <article class="card rv">
+            <div class="ic"><svg class="i"><use href="#bell"/></svg></div>
+            <h3>Хочу быть в курсе</h3>
+            <p>Подпишись на канал: новости проекта, практики и тёплые слова.</p>
+            <a class="btn ghost" href="https://t.me/+mS-C9UvielE5NDli">Подписаться на канал</a>
+          </article>
+        </div>
+
+        <!-- Форма волонтёра -->
+        <form class="card vform rv" id="volunteer" novalidate>
+          <h3>Анкета волонтёра</h3>
+
+          <label>ФИО
+            <input type="text" name="fio" autocomplete="name" required placeholder="Иванова Анна Сергеевна">
+          </label>
+
+          <label>Чем хочешь заниматься
+            <textarea name="what" rows="4" required placeholder="Например: вести чат, модерировать, писать тексты, помогать с дизайном"></textarea>
+          </label>
+
+          <button class="btn main" type="submit">Отправить заявку</button>
+          <p class="note" id="vmsg" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================================================
+       ПОДВАЛ
+       ============================================================ -->
+  <footer>
+    <div class="wrap">
+      <div>
+        <b>Рядом</b>
+        Поддержка между сессиями.
+      </div>
+
+      <div class="links">
+        <a class="btn ghost sm" href="https://t.me/+mS-C9UvielE5NDli" target="_blank" rel="noopener">
+          <svg class="i"><use href="#send"/></svg>Telegram-канал
+        </a>
+        <a class="btn ghost sm"
+           href="https://www.instagram.com/ryadom.space.care?vrfl=MXFzc2I3Nzl5aDcxNw%3D%3D&amp;utm_source=qr"
+           target="_blank" rel="noopener">
+          <svg class="i"><use href="#cam"/></svg>Instagram
+        </a>
+      </div>
+
+      <div class="hot">
+        Горячая линия
+        <a href="tel:88002000122">8-800-2000-122</a>
+      </div>
+
+      <p class="fine">Мы не заменяем терапию. Если тебе угрожает опасность, звони в экстренные службы.</p>
+    </div>
+  </footer>
+
+  <!-- ============================================================
+       СКРИПТЫ
+       ============================================================ -->
+  <script>
+    /* ----------------------------------------------------------
+       Анимация появления при скролле
+       ---------------------------------------------------------- */
+    const io = new IntersectionObserver(
+      entries => entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      }),
+      { threshold: 0.15 }
+    );
+
+    document.querySelectorAll('.rv').forEach((el, i) => {
+      el.style.transitionDelay = (i % 4) * 0.12 + 's';
+      io.observe(el);
+    });
+
+    /* ----------------------------------------------------------
+       Форма волонтёра
+       Статическая страница не может отправить письмо сама,
+       поэтому открывается почтовое приложение с готовым письмом.
+       Для автоотправки подключи Formspree/FormSubmit:
+       замени этот обработчик на fetch(...) к их адресу.
+       ---------------------------------------------------------- */
+    const TO = 'alyona.ahapkina@yandex.ru';
+    const vf = document.getElementById('volunteer');
+    const vmsg = document.getElementById('vmsg');
+
+    vf.addEventListener('submit', e => {
+      e.preventDefault();
+
+      const fio = vf.fio.value.trim();
+      const what = vf.what.value.trim();
+
+      if (!fio || !what) {
+        vmsg.textContent = 'Заполни, пожалуйста, оба поля.';
+        return;
+      }
+
+      const mailto =
+        'mailto:' + TO +
+        '?subject=' + encodeURIComponent('Заявка волонтёра: ' + fio) +
+        '&body=' + encodeURIComponent('ФИО: ' + fio + '\nЧем хочет заниматься: ' + what);
+
+      const a = document.createElement('a');
+      a.href = mailto;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      vmsg.textContent =
+        'Открываем почту: нажми «Отправить» в письме. ' +
+        'Если ничего не открылось, напиши на ' + TO + '.';
+    });
+  </script>
+</body>
+</html>
